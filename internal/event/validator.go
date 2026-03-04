@@ -9,7 +9,7 @@ var(
 
 
 func Validate(req *CreateEventRequest) error {
-	if req == nul{
+	if req == nil{
 		return ErrInvalidEventData
 	}
 	if req.Type == "" {
