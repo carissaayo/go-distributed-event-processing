@@ -7,24 +7,23 @@ import (
 )
 
 type Event struct {
-	ID string						`json:"event_id" bson:"event_id"`
-	Type string     				`json:"type" bson:"event_type"`
-	Data map[string]interface{} 	`json:"data" bson:"data"`
+	ID        string                 `json:"event_id" bson:"event_id"`
+	Type      string                 `json:"type" bson:"event_type"`
+	Data      map[string]interface{} `json:"data" bson:"data"`
 	Timestamp time.Time              `json:"timestamp" bson:"timestamp"`
-	Processed bool                     `json:"processed" bson:"processed"`
-	ObjectID primitive.ObjectID       `json:"-" bson:"_id,omitempty"`
+	Processed bool                   `json:"processed" bson:"processed"`
+	ObjectID  primitive.ObjectID     `json:"-" bson:"_id,omitempty"`
 }
 
 type CreateEventRequest struct {
-	Type string      				`json:"type"`
-	Data map[string]interface{} 	`json:"data"`
+	Type string                 `json:"type"`
+	Data map[string]interface{} `json:"data"`
 }
 
 type CreateEventResponse struct {
-	EventId string `json:"event_id"`
-	Status string `json:"status"`
+	EventID string `json:"event_id"`
+	Status  string `json:"status"`
 }
-
 
 func NewEvent(eventType string, data map[string]interface{}) *Event {
 	return &Event{
