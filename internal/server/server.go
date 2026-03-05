@@ -21,6 +21,7 @@ type Server struct {
 	store      *storage.MongoDBStore
 	batcher    *storage.Batcher
 	workerPool *processing.WorkerPool
+	cancel     context.CancelFunc
 	cfg        *config.Config
 }
 
@@ -90,6 +91,7 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	logger.Log.Info("server shutting down...")
+	s.cancel()
 	s.workerPool.Shutdown()
 	s.batcher.Shutdown()
 	s.store.Close(ctx)
