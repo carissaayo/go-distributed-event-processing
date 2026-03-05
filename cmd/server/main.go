@@ -2,31 +2,33 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/carissaayo/go-event-distributed/internal/config"
+	"github.com/carissaayo/go-event-distributed/internal/logger"
 	"github.com/carissaayo/go-event-distributed/internal/server"
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func main() {
 	_ = godotenv.Load()
 	cfg := config.Load()
 
+	logger.Init(cfg.Logging.Level, cfg.Logging.Format)
+	defer logger.Sync()
+
 	srv, err := server.New(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create server: %v\n", err)
-		os.Exit(1)
+		logger.Log.Fatal("failed to create server", zap.Error(err))
 	}
 
 	go func() {
 		if err := srv.Start(); err != nil && err.Error() != "http: Server closed" {
-			fmt.Fprintf(os.Stderr, "server error: %v\n", err)
-			os.Exit(1)
+			logger.Log.Fatal("server error", zap.Error(err))
 		}
 	}()
 
@@ -38,8 +40,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "shutdown error: %v\n", err)
-		os.Exit(1)
+		logger.Log.Fatal("shutdown error", zap.Error(err))
 	}
-	fmt.Println("Server stopped gracefully")
+	logger.Log.Info("server stopped gracefully")
 }
