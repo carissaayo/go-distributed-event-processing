@@ -2,10 +2,12 @@ package processing
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/carissaayo/go-event-distributed/internal/event"
+	"github.com/carissaayo/go-event-distributed/internal/logger"
+	"github.com/carissaayo/go-event-distributed/internal/metrics"
+	"go.uber.org/zap"
 )
 
 type WorkerPool struct {
@@ -28,25 +30,31 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		wp.wg.Add(1)
 		go wp.worker(ctx, i)
 	}
-	fmt.Printf("Started %d workers\n", wp.workerCount)
+	logger.Log.Info("worker pool started", zap.Int("workers", wp.workerCount))
 }
 
 func (wp *WorkerPool) worker(ctx context.Context, id int) {
 	defer wp.wg.Done()
-	fmt.Printf("Worker %d started\n", id)
+	logger.Log.Info("worker started", zap.Int("worker_id", id))
 
 	for {
 		select {
 		case evt, ok := <-wp.eventCh:
 			if !ok {
-				fmt.Printf("Worker %d stopping: channel closed\n", id)
+				logger.Log.Info("worker stopping: channel closed", zap.Int("worker_id", id))
 				return
 			}
+			metrics.ChannelBufferUsage.Set(float64(len(wp.eventCh)))
 			if err := wp.router.Route(ctx, evt); err != nil {
-				fmt.Printf("Worker %d error processing event %s: %v\n", id, evt.ID, err)
+				metrics.EventsFailed.Inc()
+				logger.Log.Error("worker failed to process event",
+					zap.Int("worker_id", id),
+					zap.String("event_id", evt.ID),
+					zap.Error(err),
+				)
 			}
 		case <-ctx.Done():
-			fmt.Printf("Worker %d stopping: context cancelled\n", id)
+			logger.Log.Info("worker stopping: context cancelled", zap.Int("worker_id", id))
 			return
 		}
 	}
@@ -62,8 +70,8 @@ func (wp *WorkerPool) Submit(evt *event.Event) bool {
 }
 
 func (wp *WorkerPool) Shutdown() {
-	fmt.Println("Shutting down worker pool...")
+	logger.Log.Info("shutting down worker pool...")
 	close(wp.eventCh)
 	wp.wg.Wait()
-	fmt.Println("All workers stopped")
+	logger.Log.Info("all workers stopped")
 }
