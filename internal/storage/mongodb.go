@@ -70,3 +70,7 @@ func (s *MongoDBStore) FindByID(ctx context.Context, eventID string) (*event.Eve
 func (s *MongoDBStore) Close(ctx context.Context) error {
 	return s.client.Disconnect(ctx)
 }
+
+func (s *MongoDBStore) Ping(ctx context.Context) error {
+	return s.client.Ping(ctx, nil)
+}
