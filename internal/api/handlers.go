@@ -5,20 +5,21 @@ import (
 	"net/http"
 
 	"github.com/carissaayo/go-event-distributed/internal/event"
+	"github.com/carissaayo/go-event-distributed/internal/processing"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handlers struct {
-	// workerPool *processing.WorkerPool
+	workerPool *processing.WorkerPool
 	// store      *storage.MongoDBStore
 }
 
 func NewHandlers(
-// wp *processing.WorkerPool,
-// store *storage.MongoDBStore
+	wp *processing.WorkerPool,
+	// store *storage.MongoDBStore
 ) *Handlers {
 	return &Handlers{
-		// workerPool: wp,
+		workerPool: wp,
 		// store:      store,
 	}
 }
@@ -47,9 +48,10 @@ func (h *Handlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	// metrics.EventsReceivedTotal.Inc()
 
-	// if !h.workerPool.Submit(evt) {
-	// 	metrics.
-	// }
+	if !h.workerPool.Submit(evt) {
+		http.Error(w, `{"error":"server busy, try again later"}`, http.StatusServiceUnavailable)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

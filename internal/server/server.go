@@ -7,6 +7,7 @@ import (
 
 	"github.com/carissaayo/go-event-distributed/internal/api"
 	"github.com/carissaayo/go-event-distributed/internal/config"
+	"github.com/carissaayo/go-event-distributed/internal/processing"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
@@ -15,14 +16,19 @@ type Server struct {
 	httpServer *http.Server
 	// store      *storage.MongoDBStore
 	// batcher    *storage.Batcher
-	// workerPool *processing.WorkerPool
-	cfg *config.Config
+	workerPool *processing.WorkerPool
+	cfg        *config.Config
 }
 
 func New(cfg *config.Config) *Server {
-	// ctx := context.Background()
-	handlers := api.NewHandlers()
-
+	router := processing.NewRouter(&processing.LogProcessor{})
+	workerPool := processing.NewWorkerPool(
+		cfg.Processing.WorkerCount,
+		cfg.Processing.BufferSize,
+		router,
+	)
+	workerPool.Start(context.Background())
+	handlers := api.NewHandlers(workerPool)
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.Recoverer)
