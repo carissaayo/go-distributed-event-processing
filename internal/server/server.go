@@ -7,10 +7,13 @@ import (
 
 	"github.com/carissaayo/go-event-distributed/internal/api"
 	"github.com/carissaayo/go-event-distributed/internal/config"
+	"github.com/carissaayo/go-event-distributed/internal/logger"
 	"github.com/carissaayo/go-event-distributed/internal/processing"
 	"github.com/carissaayo/go-event-distributed/internal/storage"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -58,6 +61,8 @@ func New(cfg *config.Config) (*Server, error) {
 	r.Use(api.RequestLogger)
 
 	r.Get("/health", handlers.HealthCheck)
+	r.Get("/ready", handlers.ReadyCheck)
+	r.Handle("/metrics", promhttp.Handler())
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/events", handlers.CreateEvent)
@@ -79,12 +84,12 @@ func New(cfg *config.Config) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	fmt.Printf("Server starting on port %d\n", s.cfg.Server.Port)
+	logger.Log.Info("server starting", zap.Int("port", s.cfg.Server.Port))
 	return s.httpServer.ListenAndServe()
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	fmt.Println("Server shutting down...")
+	logger.Log.Info("server shutting down...")
 	s.workerPool.Shutdown()
 	s.batcher.Shutdown()
 	s.store.Close(ctx)
