@@ -8,33 +8,56 @@ import (
 	"github.com/carissaayo/go-event-distributed/internal/api"
 	"github.com/carissaayo/go-event-distributed/internal/config"
 	"github.com/carissaayo/go-event-distributed/internal/processing"
+	"github.com/carissaayo/go-event-distributed/internal/storage"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 type Server struct {
 	httpServer *http.Server
-	// store      *storage.MongoDBStore
-	// batcher    *storage.Batcher
+	store      *storage.MongoDBStore
+	batcher    *storage.Batcher
 	workerPool *processing.WorkerPool
 	cfg        *config.Config
 }
 
-func New(cfg *config.Config) *Server {
-	router := processing.NewRouter(&processing.LogProcessor{})
+func New(cfg *config.Config) (*Server, error) {
+	ctx := context.Background()
+
+	store, err := storage.NewMongoDBStore(ctx, cfg.MongoDB.URI, cfg.MongoDB.Database)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create mongodb store: %w", err)
+	}
+
+	dlq := storage.NewDLQ()
+
+	batcher := storage.NewBatcher(
+		store,
+		dlq,
+		cfg.Processing.BatchSize,
+		cfg.Processing.FlushInterval,
+	)
+	batcher.Start(ctx)
+
+	batchProcessor := processing.NewBatchProcessor(batcher)
+	router := processing.NewRouter(batchProcessor)
+
 	workerPool := processing.NewWorkerPool(
 		cfg.Processing.WorkerCount,
 		cfg.Processing.BufferSize,
 		router,
 	)
-	workerPool.Start(context.Background())
-	handlers := api.NewHandlers(workerPool)
+	workerPool.Start(ctx)
+
+	handlers := api.NewHandlers(workerPool, store)
+
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
-
 	r.Use(api.RequestLogger)
+
+	r.Get("/health", handlers.HealthCheck)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/events", handlers.CreateEvent)
@@ -48,8 +71,11 @@ func New(cfg *config.Config) *Server {
 			ReadTimeout:  cfg.Server.ReadTimeout,
 			WriteTimeout: cfg.Server.WriteTimeout,
 		},
-		cfg: cfg,
-	}
+		store:      store,
+		batcher:    batcher,
+		workerPool: workerPool,
+		cfg:        cfg,
+	}, nil
 }
 
 func (s *Server) Start() error {
@@ -59,5 +85,8 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	fmt.Println("Server shutting down...")
+	s.workerPool.Shutdown()
+	s.batcher.Shutdown()
+	s.store.Close(ctx)
 	return s.httpServer.Shutdown(ctx)
 }

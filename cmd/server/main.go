@@ -10,13 +10,19 @@ import (
 
 	"github.com/carissaayo/go-event-distributed/internal/config"
 	"github.com/carissaayo/go-event-distributed/internal/server"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
 	cfg := config.Load()
-	srv := server.New(cfg)
 
-	// Start server in a goroutine
+	srv, err := server.New(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create server: %v\n", err)
+		os.Exit(1)
+	}
+
 	go func() {
 		if err := srv.Start(); err != nil && err.Error() != "http: Server closed" {
 			fmt.Fprintf(os.Stderr, "server error: %v\n", err)
@@ -24,12 +30,10 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal (Ctrl+C)
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	// Graceful shutdown with 10s timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

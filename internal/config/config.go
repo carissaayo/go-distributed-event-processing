@@ -43,17 +43,16 @@ type LoggingConfig struct {
 	Format string
 }
 
-
-func Load()  *Config {
+func Load() *Config {
 	return &Config{
-			Server: ServerConfig{
+		Server: ServerConfig{
 			Port:         getEnvInt("PORT", 8080),
 			Env:          getEnv("ENV", "development"),
 			ReadTimeout:  getEnvDuration("READ_TIMEOUT", 30*time.Second),
 			WriteTimeout: getEnvDuration("WRITE_TIMEOUT", 30*time.Second),
 		},
 		MongoDB: MongoDBConfig{
-			URI:      getEnv("MONGO_URI", "mongodb://admin:password@localhost:27017/events?authSource=admin"),
+			URI:      getEnv("MONGO_URI", "mongodb://localhost:27017"),
 			Database: getEnv("MONGO_DATABASE", "events"),
 			Timeout:  getEnvDuration("MONGO_TIMEOUT", 10*time.Second),
 		},

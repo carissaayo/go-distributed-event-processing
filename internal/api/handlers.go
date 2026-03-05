@@ -6,21 +6,22 @@ import (
 
 	"github.com/carissaayo/go-event-distributed/internal/event"
 	"github.com/carissaayo/go-event-distributed/internal/processing"
+	"github.com/carissaayo/go-event-distributed/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handlers struct {
 	workerPool *processing.WorkerPool
-	// store      *storage.MongoDBStore
+	store      *storage.MongoDBStore
 }
 
 func NewHandlers(
 	wp *processing.WorkerPool,
-	// store *storage.MongoDBStore
+	store *storage.MongoDBStore,
 ) *Handlers {
 	return &Handlers{
 		workerPool: wp,
-		// store:      store,
+		store:      store,
 	}
 }
 
@@ -44,7 +45,7 @@ func (h *Handlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	evt := event.NewEvent(req.Type, req.Data)
-	// evt = event.Enrich(evt)
+	evt = event.Enrich(evt)
 
 	// metrics.EventsReceivedTotal.Inc()
 
@@ -69,5 +70,17 @@ func (h *Handlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Error(w, `{"error":"not implemented"}`, http.StatusNotImplemented)
+	evt, err := h.store.FindByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if evt == nil {
+		http.Error(w, `{"error":"event not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(evt)
 }
