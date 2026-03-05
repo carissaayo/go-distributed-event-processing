@@ -2,11 +2,13 @@ package storage
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/carissaayo/go-event-distributed/internal/event"
+	"github.com/carissaayo/go-event-distributed/internal/logger"
+	"github.com/carissaayo/go-event-distributed/internal/metrics"
+	"go.uber.org/zap"
 )
 
 type Batcher struct {
@@ -35,7 +37,10 @@ func NewBatcher(store *MongoDBStore, dlq *DLQ, batchSize int, flushInterval time
 
 func (b *Batcher) Start(ctx context.Context) {
 	go b.flushLoop(ctx)
-	fmt.Println("Batcher started")
+	logger.Log.Info("batcher started",
+		zap.Int("batch_size", b.batchSize),
+		zap.Duration("flush_interval", b.flushInterval),
+	)
 }
 
 func (b *Batcher) Add(evt *event.Event) {
@@ -80,18 +85,27 @@ func (b *Batcher) flush(ctx context.Context) {
 	b.buffer = make([]*event.Event, 0, b.batchSize)
 	b.mu.Unlock()
 
+	start := time.Now()
+	metrics.BatchSize.Observe(float64(len(events)))
+
 	if err := b.store.InsertMany(ctx, events); err != nil {
-		fmt.Printf("Batch write failed (%d events): %v\n", len(events), err)
+		logger.Log.Error("batch write failed",
+			zap.Int("count", len(events)),
+			zap.Error(err),
+		)
 		for _, evt := range events {
 			b.dlq.Add(evt, err)
 		}
+		metrics.DLQSize.Set(float64(b.dlq.Len()))
 		return
 	}
-	fmt.Printf("Batch wrote %d events\n", len(events))
+
+	metrics.BatchWriteDuration.Observe(time.Since(start).Seconds())
+	logger.Log.Info("batch wrote events", zap.Int("count", len(events)))
 }
 
 func (b *Batcher) Shutdown() {
-	fmt.Println("Batcher shutting down...")
+	logger.Log.Info("batcher shutting down...")
 	<-b.done
-	fmt.Println("Batcher stopped")
+	logger.Log.Info("batcher stopped")
 }
